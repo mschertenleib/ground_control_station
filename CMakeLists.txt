@@ -34,28 +34,49 @@ CPMAddPackage(
 )
 
 
+
 CPMAddPackage(
-        GITHUB_REPOSITORY ocornut/imgui
-        GIT_TAG v1.92.1
-        DOWNLOAD_ONLY YES
+    GITHUB_REPOSITORY ocornut/imgui
+    GIT_TAG v1.92.1-docking
+    DOWNLOAD_ONLY YES
 )
 add_library(imgui STATIC)
 target_sources(imgui PRIVATE
-        ${imgui_SOURCE_DIR}/imgui.cpp
-        ${imgui_SOURCE_DIR}/imgui.h
-        ${imgui_SOURCE_DIR}/imgui_internal.h
-        ${imgui_SOURCE_DIR}/imgui_draw.cpp
-        ${imgui_SOURCE_DIR}/imgui_tables.cpp
-        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-        ${imgui_SOURCE_DIR}/imgui_demo.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui.h
+    ${imgui_SOURCE_DIR}/imgui_internal.h
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 target_include_directories(imgui SYSTEM PUBLIC
-        ${imgui_SOURCE_DIR}
-        ${imgui_SOURCE_DIR}/backends
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
 )
 target_link_libraries(imgui PRIVATE glfw)
+
+
+
+CPMAddPackage(
+    GITHUB_REPOSITORY epezent/implot
+    GIT_TAG 3da8bd3
+    DOWNLOAD_ONLY YES
+)
+add_library(implot STATIC
+    ${implot_SOURCE_DIR}/implot.cpp
+    ${implot_SOURCE_DIR}/implot.h
+    ${implot_SOURCE_DIR}/implot_internal.h
+    ${implot_SOURCE_DIR}/implot_items.cpp
+    ${implot_SOURCE_DIR}/implot_demo.cpp
+)
+target_include_directories(implot SYSTEM
+    PUBLIC ${implot_SOURCE_DIR}
+    PRIVATE ${imgui_SOURCE_DIR}
+)
+target_link_libraries(implot PRIVATE imgui)
 
 
 
@@ -65,7 +86,7 @@ target_sources(ground_control_station PRIVATE
     src/utils.hpp
 )
 target_compile_features(ground_control_station PRIVATE cxx_std_23)
-target_link_libraries(ground_control_station PRIVATE glfw imgui)
+target_link_libraries(ground_control_station PRIVATE glfw imgui implot)
 
 
 

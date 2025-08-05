@@ -4,6 +4,8 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+#include "implot.h"
+
 #define GLFW_INCLUDE_GLCOREARB
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
@@ -107,6 +109,8 @@ void run()
     auto &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 
     ImGui::StyleColorsDark();
 
@@ -128,6 +132,10 @@ void run()
     const Unique_resource imgui_opengl_context(
         true, [](bool) { ImGui_ImplOpenGL3_Shutdown(); });
 
+    ImPlot::CreateContext();
+    const Unique_resource implot_context(
+        true, [](bool) { ImPlot::DestroyContext(); });
+
     while (!glfwWindowShouldClose(window.get()))
     {
         glfwPollEvents();
@@ -136,7 +144,9 @@ void run()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        ImGui::DockSpaceOverViewport();
         ImGui::ShowDemoWindow();
+        ImPlot::ShowDemoWindow();
 
         ImGui::Render();
         int display_width {};
