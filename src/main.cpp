@@ -29,6 +29,11 @@ void APIENTRY gl_debug_callback([[maybe_unused]] GLenum source,
                                 const GLchar *message,
                                 [[maybe_unused]] const void *user_param)
 {
+    if (type == GL_DEBUG_TYPE_OTHER ||
+        severity == GL_DEBUG_SEVERITY_NOTIFICATION)
+    {
+        return;
+    }
     std::cerr << message << '\n';
 }
 
@@ -72,16 +77,53 @@ void run()
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(&gl_debug_callback, nullptr);
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    const Unique_resource imgui_context(true,
+                                        [](bool) { ImGui::DestroyContext(); });
+
+    auto &io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+    ImGui::StyleColorsDark();
+
+    auto &style = ImGui::GetStyle();
+    style.ScaleAllSizes(main_scale);
+    style.FontScaleDpi = main_scale;
+
+    if (!ImGui_ImplGlfw_InitForOpenGL(window.get(), true))
+    {
+        throw std::runtime_error("ImGui: failed to initialize GLFW backend");
+    }
+    const Unique_resource imgui_glfw_context(
+        true, [](bool) { ImGui_ImplGlfw_Shutdown(); });
+
+    if (!ImGui_ImplOpenGL3_Init(glsl_version))
+    {
+        throw std::runtime_error("ImGui: failed to initialize OpenGL backend");
+    }
+    const Unique_resource imgui_opengl_context(
+        true, [](bool) { ImGui_ImplOpenGL3_Shutdown(); });
+
     while (!glfwWindowShouldClose(window.get()))
     {
         glfwPollEvents();
 
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::ShowDemoWindow();
+
+        ImGui::Render();
         int display_width {};
         int display_height {};
         glfwGetFramebufferSize(window.get(), &display_width, &display_height);
         glViewport(0, 0, display_width, display_height);
-        glClearColor(0.47f, 0.76f, 0.89f, 1.0f);
+        glClearColor(0.45f, 0.55f, 0.60f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window.get());
     }
