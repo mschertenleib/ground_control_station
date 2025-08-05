@@ -4,11 +4,11 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#define GL_GLEXT_PROTOTYPES
 #define GLFW_INCLUDE_GLCOREARB
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
 
+#include <cassert>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -16,15 +16,36 @@
 namespace
 {
 
+PFNGLENABLEPROC glEnable {};
+PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback {};
+PFNGLVIEWPORTPROC glViewport {};
+PFNGLCLEARCOLORPROC glClearColor {};
+PFNGLCLEARPROC glClear {};
+
 void glfw_error_callback(int error, const char *description)
 {
     std::cerr << "GLFW error " << error << ": " << description << '\n';
 }
 
+void load_gl_functions()
+{
+#define LOAD_GL_FUNCTION(name)                                                 \
+    name = reinterpret_cast<decltype(name)>(glfwGetProcAddress(#name));        \
+    assert(name != nullptr)
+
+    LOAD_GL_FUNCTION(glEnable);
+    LOAD_GL_FUNCTION(glDebugMessageCallback);
+    LOAD_GL_FUNCTION(glViewport);
+    LOAD_GL_FUNCTION(glClearColor);
+    LOAD_GL_FUNCTION(glClear);
+
+#undef LOAD_GL_FUNCTION
+}
+
 void APIENTRY gl_debug_callback([[maybe_unused]] GLenum source,
-                                [[maybe_unused]] GLenum type,
+                                GLenum type,
                                 [[maybe_unused]] GLuint id,
-                                [[maybe_unused]] GLenum severity,
+                                GLenum severity,
                                 [[maybe_unused]] GLsizei length,
                                 const GLchar *message,
                                 [[maybe_unused]] const void *user_param)
@@ -73,6 +94,7 @@ void run()
     glfwMakeContextCurrent(window.get());
     glfwSwapInterval(1);
 
+    load_gl_functions();
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(&gl_debug_callback, nullptr);

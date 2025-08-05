@@ -24,9 +24,6 @@ endif ()
 include(${CPM_DOWNLOAD_LOCATION})
 
 
-find_package(OpenGL REQUIRED)
-
-
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -68,7 +65,7 @@ target_sources(ground_control_station PRIVATE
     src/utils.hpp
 )
 target_compile_features(ground_control_station PRIVATE cxx_std_23)
-target_link_libraries(ground_control_station PRIVATE glfw imgui OpenGL::GL)
+target_link_libraries(ground_control_station PRIVATE glfw imgui)
 
 
 
