@@ -65,9 +65,10 @@ target_link_libraries(imgui PRIVATE glfw)
 add_executable(ground_control_station)
 target_sources(ground_control_station PRIVATE
     src/main.cpp
+    src/utils.hpp
 )
 target_compile_features(ground_control_station PRIVATE cxx_std_23)
-target_link_libraries(ground_control_station PRIVATE glfw imgui)
+target_link_libraries(ground_control_station PRIVATE glfw imgui OpenGL::GL)
 
 
 
