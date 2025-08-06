@@ -5,12 +5,15 @@
 #include <type_traits>
 #include <utility>
 
+// FIXME: generally fix copy/move semantics. If we really need the handle type
+// to be copyable, that's not too much of a problem since non-copyable handles
+// are often RAII objects themselves.
 // TODO: requirements on T and D
 template <typename T, typename D>
 class Unique_resource
 {
 public:
-    // TODO: generalized "invalid handle" value other than relying on operator
+    // TODO: generalized "null resource" value rather than relying on operator
     // bool (via a trait on T for example)
 
     // TODO: noexcept based on type traits
@@ -36,7 +39,6 @@ public:
         rhs.m_handle = T();
     }
 
-    // TODO: reset/release
     constexpr Unique_resource &operator=(Unique_resource &&rhs) noexcept
     {
         Unique_resource tmp(std::move(rhs));
@@ -52,6 +54,7 @@ public:
         if (m_handle)
         {
             m_deleter(m_handle);
+            m_handle = T();
         }
     }
 
@@ -60,6 +63,25 @@ public:
         return m_handle;
     }
 
+    template <typename UT>
+        requires std::constructible_from<T, UT &&>
+    constexpr void reset(UT &&handle) noexcept
+    {
+        if (m_handle)
+        {
+            m_deleter(m_handle);
+        }
+        m_handle = std::forward<UT>(handle);
+    }
+
+    [[nodiscard]] constexpr T release() noexcept
+    {
+        auto handle = m_handle;
+        m_handle = T();
+        return handle;
+    }
+
+    // TODO: noexcept based on type traits?
     constexpr void swap(Unique_resource &rhs) noexcept
     {
         using std::swap;

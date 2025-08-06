@@ -102,7 +102,7 @@ Application create_application()
     {
         throw std::runtime_error("Failed to initialize GLFW");
     }
-    app.glfw_context = decltype(app.glfw_context)(true);
+    app.glfw_context.reset(true);
 
     constexpr auto glsl_version = "#version 150";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -124,7 +124,7 @@ Application create_application()
     {
         throw std::runtime_error("Failed to create GLFW window");
     }
-    app.window = decltype(app.window)(window_ptr);
+    app.window.reset(window_ptr);
 
     glfwMakeContextCurrent(app.window.get());
     glfwSwapInterval(1);
@@ -136,7 +136,7 @@ Application create_application()
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    app.imgui_context = decltype(app.imgui_context)(true);
+    app.imgui_context.reset(true);
 
     auto &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -154,16 +154,16 @@ Application create_application()
     {
         throw std::runtime_error("ImGui: failed to initialize GLFW backend");
     }
-    app.imgui_glfw_context = decltype(app.imgui_glfw_context)(true);
+    app.imgui_glfw_context.reset(true);
 
     if (!ImGui_ImplOpenGL3_Init(glsl_version))
     {
         throw std::runtime_error("ImGui: failed to initialize OpenGL backend");
     }
-    app.imgui_opengl_context = decltype(app.imgui_opengl_context)(true);
+    app.imgui_opengl_context.reset(true);
 
     ImPlot::CreateContext();
-    app.implot_context = decltype(app.implot_context)(true);
+    app.implot_context.reset(true);
 
     return app;
 }
