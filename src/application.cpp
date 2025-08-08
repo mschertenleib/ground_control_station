@@ -60,6 +60,12 @@ void APIENTRY gl_debug_callback([[maybe_unused]] GLenum source,
     std::cerr << message << '\n';
 }
 
+void make_ui()
+{
+    ImGui::DockSpaceOverViewport();
+    ImPlot::ShowDemoWindow();
+}
+
 } // namespace
 
 void GLFW_deleter::operator()(bool)
@@ -110,7 +116,9 @@ Application create_application()
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#ifndef NDEBUG
     glfwWindowHint(GLFW_CONTEXT_DEBUG, GLFW_TRUE);
+#endif
 
     const auto main_scale =
         ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
@@ -130,9 +138,11 @@ Application create_application()
     glfwSwapInterval(1);
 
     load_gl_functions();
+#ifndef NDEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(&gl_debug_callback, nullptr);
+#endif
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -178,9 +188,7 @@ void run_application(Application &application)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::DockSpaceOverViewport();
-        ImGui::ShowDemoWindow();
-        ImPlot::ShowDemoWindow();
+        make_ui();
 
         ImGui::Render();
         int display_width {};
