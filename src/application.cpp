@@ -1,4 +1,5 @@
 #include "application.hpp"
+#include "serial.hpp"
 #include "unique_resource.hpp"
 
 #include "imgui.h"
@@ -180,6 +181,13 @@ Application create_application()
 
 void run_application(Application &application)
 {
+    Serial_port port;
+    port.open("/dev/ttyACM0", 115200);
+    const std::uint8_t data[] {0, 1, 2, 3, 4, 5, 6, 7};
+    port.write_all(data, sizeof(data));
+    port.close();
+    return;
+
     while (!glfwWindowShouldClose(application.window.get()))
     {
         glfwPollEvents();

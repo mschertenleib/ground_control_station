@@ -84,6 +84,7 @@ add_executable(ground_control_station)
 target_sources(ground_control_station PRIVATE
     src/main.cpp
     src/application.cpp src/application.hpp
+    src/serial.cpp src/serial.hpp
     src/unique_resource.hpp
 )
 target_compile_features(ground_control_station PRIVATE cxx_std_23)
