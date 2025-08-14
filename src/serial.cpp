@@ -110,7 +110,7 @@ void File_descriptor_deleter::operator()(int fd) const
 }
 
 // FIXME: many of these error cases should be handled with std::expected
-void Serial_port::open(std::string_view path, int baudrate)
+void Serial_device::open(std::string_view path, int baudrate)
 {
     // FIXME
     if (handle.get() != -1)
@@ -176,13 +176,12 @@ void Serial_port::open(std::string_view path, int baudrate)
     }
 }
 
-void Serial_port::close()
+void Serial_device::close()
 {
-    // FIXME
-    handle.reset(-1);
+    handle.reset();
 }
 
-std::size_t Serial_port::write_all(const void *data, std::size_t len)
+std::size_t Serial_device::write_all(const void *data, std::size_t len)
 {
     if (handle.get() == -1)
     {
@@ -213,9 +212,9 @@ std::size_t Serial_port::write_all(const void *data, std::size_t len)
     return total;
 }
 
-std::size_t Serial_port::read_some(void *buf,
-                                   std::size_t maxlen,
-                                   std::chrono::milliseconds timeout)
+std::size_t Serial_device::read_some(void *buf,
+                                     std::size_t maxlen,
+                                     std::chrono::milliseconds timeout)
 {
     if (handle.get() == -1)
     {

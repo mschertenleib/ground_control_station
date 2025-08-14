@@ -61,15 +61,33 @@ void APIENTRY gl_debug_callback([[maybe_unused]] GLenum source,
     std::cerr << message << '\n';
 }
 
-void make_ui()
+void make_ui(Application &application)
 {
     ImGui::DockSpaceOverViewport();
     ImPlot::ShowDemoWindow();
+
+    if (ImGui::Begin("Serial"))
+    {
+        // FIXME: no default device, but save it to some config file
+        static char device[512] {"/dev/ttyACM0"};
+        if (ImGui::Button("Open"))
+        {
+            application.serial_device.open(device, 115200);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close"))
+        {
+            application.serial_device.close();
+        }
+        // FIXME: if it's not too restrictive we should list potential devices
+        ImGui::InputText("Device", device, sizeof(device));
+    }
+    ImGui::End();
 }
 
 } // namespace
 
-void GLFW_deleter::operator()(bool)
+void GLFW_deleter::operator()(Stateless)
 {
     glfwTerminate();
 }
@@ -79,22 +97,22 @@ void Window_deleter::operator()(GLFWwindow *window)
     glfwDestroyWindow(window);
 }
 
-void ImGui_deleter::operator()(bool)
+void ImGui_deleter::operator()(Stateless)
 {
     ImGui::DestroyContext();
 }
 
-void ImGui_glfw_deleter::operator()(bool)
+void ImGui_glfw_deleter::operator()(Stateless)
 {
     ImGui_ImplGlfw_Shutdown();
 }
 
-void ImGui_opengl_deleter::operator()(bool)
+void ImGui_opengl_deleter::operator()(Stateless)
 {
     ImGui_ImplOpenGL3_Shutdown();
 }
 
-void ImPlot_deleter::operator()(bool)
+void ImPlot_deleter::operator()(Stateless)
 {
     ImPlot::DestroyContext();
 }
@@ -109,7 +127,7 @@ Application create_application()
     {
         throw std::runtime_error("Failed to initialize GLFW");
     }
-    app.glfw_context.reset(true);
+    app.glfw_context.reset(Stateless {});
 
     constexpr auto glsl_version = "#version 150";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -147,7 +165,7 @@ Application create_application()
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    app.imgui_context.reset(true);
+    app.imgui_context.reset(Stateless {});
 
     auto &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -165,29 +183,22 @@ Application create_application()
     {
         throw std::runtime_error("ImGui: failed to initialize GLFW backend");
     }
-    app.imgui_glfw_context.reset(true);
+    app.imgui_glfw_context.reset(Stateless {});
 
     if (!ImGui_ImplOpenGL3_Init(glsl_version))
     {
         throw std::runtime_error("ImGui: failed to initialize OpenGL backend");
     }
-    app.imgui_opengl_context.reset(true);
+    app.imgui_opengl_context.reset(Stateless {});
 
     ImPlot::CreateContext();
-    app.implot_context.reset(true);
+    app.implot_context.reset(Stateless {});
 
     return app;
 }
 
 void run_application(Application &application)
 {
-    Serial_port port;
-    port.open("/dev/ttyACM0", 115200);
-    const std::uint8_t data[] {0, 1, 2, 3, 4, 5, 6, 7};
-    port.write_all(data, sizeof(data));
-    port.close();
-    return;
-
     while (!glfwWindowShouldClose(application.window.get()))
     {
         glfwPollEvents();
@@ -196,7 +207,7 @@ void run_application(Application &application)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        make_ui();
+        make_ui(application);
 
         ImGui::Render();
         int display_width {};
@@ -204,7 +215,7 @@ void run_application(Application &application)
         glfwGetFramebufferSize(
             application.window.get(), &display_width, &display_height);
         glViewport(0, 0, display_width, display_height);
-        glClearColor(0.45f, 0.55f, 0.60f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

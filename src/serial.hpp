@@ -6,17 +6,12 @@
 #include <chrono>
 #include <string_view>
 
-// FIXME: we should really use an extra bool in Unique_resource like
-// std::unique_resource
-template <>
-inline constexpr int null_resource<int> {-1};
-
 struct File_descriptor_deleter
 {
     void operator()(int fd) const;
 };
 
-struct Serial_port
+struct Serial_device
 {
     void open(std::string_view path, int baudrate);
     void close();
