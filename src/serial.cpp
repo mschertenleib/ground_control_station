@@ -110,10 +110,10 @@ void File_descriptor_deleter::operator()(int fd) const
 }
 
 // FIXME: many of these error cases should be handled with std::expected
-void Serial_device::open(std::string_view path, int baudrate)
+void Serial_device::open(std::string_view name, int baudrate)
 {
     // FIXME
-    if (handle.get() != -1)
+    if (handle)
     {
         close();
     }
@@ -121,7 +121,7 @@ void Serial_device::open(std::string_view path, int baudrate)
     // FIXME: why the conversion to string ?
     // Open file descriptor
     const auto fd =
-        ::open(std::string(path).c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
+        ::open(std::string(name).c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd < 0)
     {
         throw_system_error("open");
@@ -181,9 +181,14 @@ void Serial_device::close()
     handle.reset();
 }
 
+bool Serial_device::is_open() const
+{
+    return static_cast<bool>(handle);
+}
+
 std::size_t Serial_device::write_all(const void *data, std::size_t len)
 {
-    if (handle.get() == -1)
+    if (!handle)
     {
         throw std::system_error(
             EBADF, std::generic_category(), "SerialPort not open");
@@ -216,7 +221,7 @@ std::size_t Serial_device::read_some(void *buf,
                                      std::size_t maxlen,
                                      std::chrono::milliseconds timeout)
 {
-    if (handle.get() == -1)
+    if (!handle)
     {
         throw std::system_error(
             EBADF, std::generic_category(), "SerialPort not open");

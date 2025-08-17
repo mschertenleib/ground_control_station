@@ -81,6 +81,18 @@ void make_ui(Application &application)
         }
         // FIXME: if it's not too restrictive we should list potential devices
         ImGui::InputText("Device", device, sizeof(device));
+
+        if (application.serial_device.is_open())
+        {
+            static char buffer[1024] {};
+            const auto read_len = application.serial_device.read_some(
+                buffer, sizeof(buffer), std::chrono::milliseconds {0});
+            if (read_len > 0)
+            {
+                buffer[read_len] = '\0';
+            }
+            ImGui::TextColored({0.75f, 0.25f, 0.25f, 1.0f}, "%s", buffer);
+        }
     }
     ImGui::End();
 }

@@ -5,6 +5,9 @@
 #include <type_traits>
 #include <utility>
 
+// TODO: look at this for reference
+// #include <experimental/scope>
+
 // FIXME: generally fix copy/move semantics. If we really need the resource type
 // to be copyable, that's not too much of a problem since non-copyable resources
 // are often RAII objects themselves.
@@ -98,6 +101,11 @@ public:
         swap(m_resource, rhs.m_resource);
         swap(m_deleter, rhs.m_deleter);
         swap(m_owns_resource, rhs.m_owns_resource);
+    }
+
+    [[nodiscard]] constexpr operator bool() const noexcept
+    {
+        return m_owns_resource;
     }
 
 private:

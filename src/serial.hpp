@@ -13,8 +13,10 @@ struct File_descriptor_deleter
 
 struct Serial_device
 {
-    void open(std::string_view path, int baudrate);
+    void open(std::string_view name, int baudrate);
     void close();
+
+    [[nodiscard]] bool is_open() const;
 
     std::size_t write_all(const void *data, std::size_t len);
     std::size_t read_some(
