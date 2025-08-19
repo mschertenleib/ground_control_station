@@ -8,24 +8,22 @@
 // TODO: look at this for reference
 // #include <experimental/scope>
 
-// FIXME: generally fix copy/move semantics. If we really need the resource type
-// to be copyable, that's not too much of a problem since non-copyable resources
-// are often RAII objects themselves.
 // TODO: requirements on R and D
 template <typename R, typename D>
-class Unique_resource
+class [[nodiscard]] Unique_resource
 {
 public:
-    // TODO: disable this if the resource or deleter are not default
-    // constructible
-    // TODO: noexcept based on type traits
-    constexpr Unique_resource()
+    constexpr Unique_resource() noexcept(
+        std::is_nothrow_default_constructible_v<R> &&
+        std::is_nothrow_default_constructible_v<D>)
+        requires(std::is_default_constructible_v<R> &&
+                 std::is_default_constructible_v<D>)
         : m_resource {}, m_deleter {}, m_owns_resource {false}
     {
     }
 
     // TODO: noexcept based on type traits
-    // TODO: see cppreference.com for the complete requirements
+    // TODO: see cppreference.com for the complete requirements and behaviour
     template <typename RR, typename DD = D>
         requires std::constructible_from<R, RR &&> &&
                      std::constructible_from<D, DD &&> &&
@@ -68,6 +66,11 @@ public:
     [[nodiscard]] constexpr const R &get() const noexcept
     {
         return m_resource;
+    }
+
+    [[nodiscard]] constexpr const D &get_deleter() const noexcept
+    {
+        return m_deleter;
     }
 
     constexpr void reset() noexcept

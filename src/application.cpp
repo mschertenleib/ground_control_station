@@ -61,7 +61,7 @@ void APIENTRY gl_debug_callback([[maybe_unused]] GLenum source,
     std::cerr << message << '\n';
 }
 
-void make_ui(Application &application)
+void make_ui(Serial_device &serial_device)
 {
     ImGui::DockSpaceOverViewport();
     ImPlot::ShowDemoWindow();
@@ -72,20 +72,20 @@ void make_ui(Application &application)
         static char device[512] {"/dev/ttyACM0"};
         if (ImGui::Button("Open"))
         {
-            application.serial_device.open(device, 115200);
+            serial_device.open(device, 115200);
         }
         ImGui::SameLine();
         if (ImGui::Button("Close"))
         {
-            application.serial_device.close();
+            serial_device.close();
         }
         // FIXME: if it's not too restrictive we should list potential devices
         ImGui::InputText("Device", device, sizeof(device));
 
-        if (application.serial_device.is_open())
+        if (serial_device.is_open())
         {
             static char buffer[1024] {};
-            const auto read_len = application.serial_device.read_some(
+            const auto read_len = serial_device.read_some(
                 buffer, sizeof(buffer), std::chrono::milliseconds {0});
             if (read_len > 0)
             {
@@ -97,49 +97,69 @@ void make_ui(Application &application)
     ImGui::End();
 }
 
+struct Stateless
+{
+};
+
+struct GLFW_deleter
+{
+    void operator()(Stateless)
+    {
+        glfwTerminate();
+    }
+};
+
+struct Window_deleter
+{
+    void operator()(struct GLFWwindow *window)
+    {
+        glfwDestroyWindow(window);
+    }
+};
+
+struct ImGui_deleter
+{
+    void operator()(Stateless)
+    {
+        ImGui::DestroyContext();
+    }
+};
+
+struct ImGui_glfw_deleter
+{
+    void operator()(Stateless)
+    {
+        ImGui_ImplGlfw_Shutdown();
+    }
+};
+
+struct ImGui_opengl_deleter
+{
+    void operator()(Stateless)
+    {
+        ImGui_ImplOpenGL3_Shutdown();
+    }
+};
+
+struct ImPlot_deleter
+{
+    void operator()(Stateless)
+    {
+        ImPlot::DestroyContext();
+    }
+};
+
 } // namespace
 
-void GLFW_deleter::operator()(Stateless)
+void run_application()
 {
-    glfwTerminate();
-}
-
-void Window_deleter::operator()(GLFWwindow *window)
-{
-    glfwDestroyWindow(window);
-}
-
-void ImGui_deleter::operator()(Stateless)
-{
-    ImGui::DestroyContext();
-}
-
-void ImGui_glfw_deleter::operator()(Stateless)
-{
-    ImGui_ImplGlfw_Shutdown();
-}
-
-void ImGui_opengl_deleter::operator()(Stateless)
-{
-    ImGui_ImplOpenGL3_Shutdown();
-}
-
-void ImPlot_deleter::operator()(Stateless)
-{
-    ImPlot::DestroyContext();
-}
-
-Application create_application()
-{
-    Application app {};
-
     glfwSetErrorCallback(&glfw_error_callback);
 
     if (!glfwInit())
     {
         throw std::runtime_error("Failed to initialize GLFW");
     }
-    app.glfw_context.reset(Stateless {});
+    const Unique_resource<Stateless, GLFW_deleter> glfw_context({});
 
     constexpr auto glsl_version = "#version 150";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -163,9 +183,9 @@ Application create_application()
     {
         throw std::runtime_error("Failed to create GLFW window");
     }
-    app.window.reset(window_ptr);
+    const Unique_resource<GLFWwindow *, Window_deleter> window(window_ptr);
 
-    glfwMakeContextCurrent(app.window.get());
+    glfwMakeContextCurrent(window.get());
     glfwSwapInterval(1);
 
     load_gl_functions();
@@ -177,7 +197,7 @@ Application create_application()
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    app.imgui_context.reset(Stateless {});
+    const Unique_resource<Stateless, ImGui_deleter> imgui_context({});
 
     auto &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -191,27 +211,25 @@ Application create_application()
     style.ScaleAllSizes(main_scale);
     style.FontScaleDpi = main_scale;
 
-    if (!ImGui_ImplGlfw_InitForOpenGL(app.window.get(), true))
+    if (!ImGui_ImplGlfw_InitForOpenGL(window.get(), true))
     {
         throw std::runtime_error("ImGui: failed to initialize GLFW backend");
     }
-    app.imgui_glfw_context.reset(Stateless {});
+    const Unique_resource<Stateless, ImGui_glfw_deleter> imgui_glfw_context({});
 
     if (!ImGui_ImplOpenGL3_Init(glsl_version))
     {
         throw std::runtime_error("ImGui: failed to initialize OpenGL backend");
     }
-    app.imgui_opengl_context.reset(Stateless {});
+    const Unique_resource<Stateless, ImGui_opengl_deleter> imgui_opengl_context(
+        {});
 
     ImPlot::CreateContext();
-    app.implot_context.reset(Stateless {});
+    const Unique_resource<Stateless, ImPlot_deleter> implot_context({});
 
-    return app;
-}
+    Serial_device serial_device;
 
-void run_application(Application &application)
-{
-    while (!glfwWindowShouldClose(application.window.get()))
+    while (!glfwWindowShouldClose(window.get()))
     {
         glfwPollEvents();
 
@@ -219,18 +237,17 @@ void run_application(Application &application)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        make_ui(application);
+        make_ui(serial_device);
 
         ImGui::Render();
         int display_width {};
         int display_height {};
-        glfwGetFramebufferSize(
-            application.window.get(), &display_width, &display_height);
+        glfwGetFramebufferSize(window.get(), &display_width, &display_height);
         glViewport(0, 0, display_width, display_height);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-        glfwSwapBuffers(application.window.get());
+        glfwSwapBuffers(window.get());
     }
 }

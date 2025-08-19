@@ -34,11 +34,6 @@ void set_raw_8n1(termios &tio) noexcept
     tio.c_cc[VTIME] = 0;
 }
 
-[[noreturn]] void throw_system_error(const char *what)
-{
-    throw std::system_error(errno, std::generic_category(), what);
-}
-
 [[nodiscard]] constexpr speed_t baudrate_to_speed(int baud) noexcept
 {
     switch (baud)
@@ -124,7 +119,7 @@ void Serial_device::open(std::string_view name, int baudrate)
         ::open(std::string(name).c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd < 0)
     {
-        throw_system_error("open");
+        throw std::system_error(errno, std::generic_category(), "open");
     }
     handle.reset(fd);
 
@@ -133,21 +128,23 @@ void Serial_device::open(std::string_view name, int baudrate)
     if (flags == -1 ||
         ::fcntl(handle.get(), F_SETFL, flags & ~O_NONBLOCK) == -1)
     {
-        throw_system_error("fcntl(F_SETFL)");
+        throw std::system_error(
+            errno, std::generic_category(), "fcntl(F_SETFL)");
     }
 
     // Close-on-exec (portable via fcntl).
     const auto clo = ::fcntl(handle.get(), F_GETFD, 0);
     if (clo == -1 || ::fcntl(handle.get(), F_SETFD, clo | FD_CLOEXEC) == -1)
     {
-        throw_system_error("fcntl(FD_CLOEXEC)");
+        throw std::system_error(
+            errno, std::generic_category(), "fcntl(FD_CLOEXEC)");
     }
 
     // Configure termios
     termios tio {};
     if (::tcgetattr(handle.get(), &tio) == -1)
     {
-        throw_system_error("tcgetattr");
+        throw std::system_error(errno, std::generic_category(), "tcgetattr");
     }
 
     set_raw_8n1(tio);
@@ -162,17 +159,18 @@ void Serial_device::open(std::string_view name, int baudrate)
 
     if (::cfsetispeed(&tio, sp) == -1 || ::cfsetospeed(&tio, sp) == -1)
     {
-        throw_system_error("cfset[io]speed");
+        throw std::system_error(
+            errno, std::generic_category(), "cfset[io]speed");
     }
 
     // Flush both input and output queues, then apply now
     if (::tcflush(handle.get(), TCIOFLUSH) == -1)
     {
-        throw_system_error("tcflush");
+        throw std::system_error(errno, std::generic_category(), "tcflush");
     }
     if (::tcsetattr(handle.get(), TCSANOW, &tio) == -1)
     {
-        throw_system_error("tcsetattr");
+        throw std::system_error(errno, std::generic_category(), "tcsetattr");
     }
 }
 
@@ -205,13 +203,13 @@ std::size_t Serial_device::write_all(const void *data, std::size_t len)
             {
                 continue;
             }
-            throw_system_error("write");
+            throw std::system_error(errno, std::generic_category(), "write");
         }
         total += static_cast<std::size_t>(n);
     }
     if (::tcdrain(handle.get()) == -1)
     {
-        throw_system_error("tcdrain");
+        throw std::system_error(errno, std::generic_category(), "tcdrain");
     }
 
     return total;
@@ -245,7 +243,7 @@ std::size_t Serial_device::read_some(void *buf,
             {
                 continue;
             }
-            throw_system_error("poll");
+            throw std::system_error(errno, std::generic_category(), "poll");
         }
     }
     for (;;)
@@ -259,6 +257,6 @@ std::size_t Serial_device::read_some(void *buf,
         {
             continue;
         }
-        throw_system_error("read");
+        throw std::system_error(errno, std::generic_category(), "read");
     }
 }

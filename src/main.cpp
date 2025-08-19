@@ -8,8 +8,7 @@ int main()
 {
     try
     {
-        auto application = create_application();
-        run_application(application);
+        run_application();
 
         return EXIT_SUCCESS;
     }
