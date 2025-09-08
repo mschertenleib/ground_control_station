@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.19)
 
 project(ground_control_station LANGUAGES CXX)
+set(target_name ground_control_station)
 
 
 set(CPM_DOWNLOAD_VERSION 0.38.2)
-
 if (CPM_SOURCE_CACHE)
     set(CPM_DOWNLOAD_LOCATION "${CPM_SOURCE_CACHE}/cpm/CPM_${CPM_DOWNLOAD_VERSION}.cmake")
 elseif (DEFINED ENV{CPM_SOURCE_CACHE})
@@ -12,7 +12,6 @@ elseif (DEFINED ENV{CPM_SOURCE_CACHE})
 else ()
     set(CPM_DOWNLOAD_LOCATION "${CMAKE_BINARY_DIR}/cmake/CPM_${CPM_DOWNLOAD_VERSION}.cmake")
 endif ()
-
 if (NOT (EXISTS ${CPM_DOWNLOAD_LOCATION}))
     message(STATUS "Downloading CPM.cmake to ${CPM_DOWNLOAD_LOCATION}")
     file(DOWNLOAD
@@ -20,7 +19,6 @@ if (NOT (EXISTS ${CPM_DOWNLOAD_LOCATION}))
         ${CPM_DOWNLOAD_LOCATION}
     )
 endif ()
-
 include(${CPM_DOWNLOAD_LOCATION})
 
 
@@ -80,15 +78,15 @@ target_link_libraries(implot PRIVATE imgui)
 
 
 
-add_executable(ground_control_station)
-target_sources(ground_control_station PRIVATE
+add_executable(${target_name})
+target_sources(${target_name} PRIVATE
     src/main.cpp
     src/application.cpp src/application.hpp
     src/serial.cpp src/serial.hpp
     src/unique_resource.hpp
 )
-target_compile_features(ground_control_station PRIVATE cxx_std_23)
-target_link_libraries(ground_control_station PRIVATE glfw imgui implot)
+target_compile_features(${target_name} PRIVATE cxx_std_23)
+target_link_libraries(${target_name} PRIVATE glfw imgui implot)
 
 
 
@@ -116,11 +114,11 @@ set(gcc_warnings
     -Wswitch-enum
 )
 if (CMAKE_CXX_COMPILER_ID MATCHES ".*Clang")
-    target_compile_options(ground_control_station PRIVATE ${clang_warnings})
+    target_compile_options(${target_name} PRIVATE ${clang_warnings})
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(ground_control_station PRIVATE ${gcc_warnings})
+    target_compile_options(${target_name} PRIVATE ${gcc_warnings})
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    target_compile_options(ground_control_station PRIVATE /W4)
+    target_compile_options(${target_name} PRIVATE /W4)
 else ()
     message(WARNING "No warnings set for compiler ${CMAKE_CXX_COMPILER_ID}")
 endif ()
@@ -138,11 +136,17 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         )
     endif()
 
-    target_compile_options(ground_control_station PRIVATE $<$<CONFIG:Debug>:${san_compile}>)
-    target_link_options(ground_control_station PRIVATE $<$<CONFIG:Debug>:${san_link}>)
+    target_compile_options(${target_name} PRIVATE $<$<CONFIG:Debug>:${san_compile}>)
+    target_link_options(${target_name} PRIVATE $<$<CONFIG:Debug>:${san_link}>)
     
     set(lsan_suppressions "${CMAKE_BINARY_DIR}/lsan.supp")
-    file(WRITE "${lsan_suppressions}" "leak:_glfwCreateContextGL")
+    file(WRITE "${lsan_suppressions}"
+"leak:_glfwCreateContextGL
+leak:_glfwInitEGL
+leak:libwayland-client
+leak:libgtk
+leak:libfontconfig
+")
 
     set(asan_defaults "symbolize=1:fast_unwind_on_malloc=0:detect_leaks=1:leak_check_at_exit=1")
     set(lsan_defaults "suppressions=$<SHELL_PATH:${lsan_suppressions}>")
@@ -163,7 +167,7 @@ extern \"C\" const char* __lsan_default_options() {
 extern \"C\" const char* __ubsan_default_options() {
     return \"${ubsan_defaults}\";
 }")
-    target_sources(ground_control_station PRIVATE $<$<CONFIG:Debug>:${san_defaults_src}>)
+    target_sources(${target_name} PRIVATE $<$<CONFIG:Debug>:${san_defaults_src}>)
 endif ()
 
 
