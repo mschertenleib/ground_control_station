@@ -2,41 +2,22 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 #include <termios.h>
 #include <unistd.h>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <system_error>
 
 namespace
 {
 
-void set_raw_8n1(termios &tio) noexcept
+[[nodiscard]] constexpr speed_t baudrate_to_speed(int baudrate) noexcept
 {
-    // Raw mode baseline
-    ::cfmakeraw(&tio);
-    // 8 data bits
-    tio.c_cflag &= static_cast<tcflag_t>(~CSIZE);
-    tio.c_cflag |= CS8;
-    // Ignore modem ctrl, enable receiver
-    tio.c_cflag |= static_cast<tcflag_t>(CLOCAL | CREAD);
-    // No parity, 1 stop
-    tio.c_cflag &= static_cast<tcflag_t>(~(PARENB | PARODD | CSTOPB));
-#ifdef CRTSCTS
-    // No HW flow control
-    tio.c_cflag &= ~CRTSCTS;
-#endif
-    // No SW flow control
-    tio.c_iflag &= static_cast<tcflag_t>(~(IXON | IXOFF | IXANY));
-
-    // Blocking read: return as soon as 1 byte is available.
-    tio.c_cc[VMIN] = 1;
-    tio.c_cc[VTIME] = 0;
-}
-
-[[nodiscard]] constexpr speed_t baudrate_to_speed(int baud) noexcept
-{
-    switch (baud)
+    switch (baudrate)
     {
     case 0: return B0;
     case 50: return B50;
@@ -104,159 +85,204 @@ void File_descriptor_deleter::operator()(int fd) const
     ::close(fd);
 }
 
-// FIXME: many of these error cases should be handled with std::expected
-void Serial_device::open(std::string_view name, int baudrate)
+void File_descriptor_flushing_deleter::operator()(int fd) const
 {
-    // FIXME
-    if (handle)
+    ::tcflush(fd, TCIOFLUSH);
+    ::close(fd);
+}
+
+Serial_port::~Serial_port()
+{
+    // FIXME: proper rule of 5 probably necessary?
+    close();
+}
+
+void Serial_port::open(const std::string &path, int baudrate)
+{
+    // FIXME ?
+    if (m_serial_fd)
     {
         close();
     }
 
-    // FIXME: why the conversion to string ?
-    // Open file descriptor
-    const auto fd =
-        ::open(std::string(name).c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
-    if (fd < 0)
+    const auto serial_fd =
+        ::open(path.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+    if (serial_fd < 0)
     {
         throw std::system_error(errno, std::generic_category(), "open");
     }
-    handle.reset(fd);
+    m_serial_fd.reset(serial_fd);
 
-    // Make it synchronous
-    const auto flags = ::fcntl(handle.get(), F_GETFL, 0);
-    if (flags == -1 ||
-        ::fcntl(handle.get(), F_SETFL, flags & ~O_NONBLOCK) == -1)
-    {
-        throw std::system_error(
-            errno, std::generic_category(), "fcntl(F_SETFL)");
-    }
-
-    // Close-on-exec (portable via fcntl).
-    const auto clo = ::fcntl(handle.get(), F_GETFD, 0);
-    if (clo == -1 || ::fcntl(handle.get(), F_SETFD, clo | FD_CLOEXEC) == -1)
-    {
-        throw std::system_error(
-            errno, std::generic_category(), "fcntl(FD_CLOEXEC)");
-    }
-
-    // Configure termios
     termios tio {};
-    if (::tcgetattr(handle.get(), &tio) == -1)
+    if (::tcgetattr(m_serial_fd.get(), &tio) < 0)
     {
         throw std::system_error(errno, std::generic_category(), "tcgetattr");
     }
 
-    set_raw_8n1(tio);
+    ::cfmakeraw(&tio);
+    // Ignore modem control, enable receiver
+    tio.c_cflag |= static_cast<tcflag_t>(CLOCAL | CREAD);
+    // 8 data bits
+    tio.c_cflag &= static_cast<tcflag_t>(~CSIZE);
+    tio.c_cflag |= static_cast<tcflag_t>(CS8);
+    // No parity, 1 stop
+    tio.c_cflag &= static_cast<tcflag_t>(~(PARENB | PARODD | CSTOPB));
+#ifdef CRTSCTS
+    // No hardware flow control
+    tio.c_cflag &= ~CRTSCTS;
+#endif
+    // No software flow control
+    tio.c_iflag &= static_cast<tcflag_t>(~(IXON | IXOFF | IXANY));
 
-    const auto sp = baudrate_to_speed(baudrate);
-    if (sp == 0)
+    tio.c_cc[VMIN] = 0;
+    tio.c_cc[VTIME] = 0;
+
+    const auto speed = baudrate_to_speed(baudrate);
+    if (speed == 0)
     {
         throw std::system_error(EINVAL,
                                 std::generic_category(),
                                 "Unsupported baud for this platform");
     }
-
-    if (::cfsetispeed(&tio, sp) == -1 || ::cfsetospeed(&tio, sp) == -1)
+    if (::cfsetispeed(&tio, speed) < 0 || ::cfsetospeed(&tio, speed) < 0)
     {
         throw std::system_error(
             errno, std::generic_category(), "cfset[io]speed");
     }
 
-    // Flush both input and output queues, then apply now
-    if (::tcflush(handle.get(), TCIOFLUSH) == -1)
+    if (::tcflush(m_serial_fd.get(), TCIOFLUSH) < 0)
     {
         throw std::system_error(errno, std::generic_category(), "tcflush");
     }
-    if (::tcsetattr(handle.get(), TCSANOW, &tio) == -1)
+    if (::tcsetattr(m_serial_fd.get(), TCSANOW, &tio) < 0)
     {
         throw std::system_error(errno, std::generic_category(), "tcsetattr");
     }
-}
 
-void Serial_device::close()
-{
-    handle.reset();
-}
-
-bool Serial_device::is_open() const
-{
-    return static_cast<bool>(handle);
-}
-
-std::size_t Serial_device::write_all(const void *data, std::size_t len)
-{
-    if (!handle)
+    const auto wake_fd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (wake_fd < 0)
     {
-        throw std::system_error(
-            EBADF, std::generic_category(), "SerialPort not open");
+        throw std::system_error(errno, std::generic_category(), "eventfd");
+    }
+    m_wake_fd.reset(wake_fd);
+
+    m_rx_thread = std::jthread([this](std::stop_token st) { rx_loop(st); });
+}
+
+void Serial_port::close()
+{
+    if (!m_serial_fd)
+    {
+        return;
     }
 
-    const auto p = static_cast<const std::uint8_t *>(data);
-    std::size_t total {0};
-    while (total < len)
+    m_rx_thread.request_stop();
+
+    constexpr std::uint64_t one {1};
+    ::write(m_wake_fd.get(), &one, sizeof(one));
+
+    m_rx_thread.join();
+
+    m_serial_fd.reset();
+    m_wake_fd.reset();
+}
+
+bool Serial_port::is_open() const noexcept
+{
+    return static_cast<bool>(m_serial_fd);
+}
+
+void Serial_port::rx_loop(std::stop_token stop_token)
+{
+    std::array<std::byte, 4096> buffer {};
+
+    while (!stop_token.stop_requested())
     {
-        const auto n = ::write(handle.get(), p + total, len - total);
-        if (n < 0)
+        pollfd fds[] {{.fd = m_serial_fd.get(), .events = POLLIN, .revents = 0},
+                      {.fd = m_wake_fd.get(), .events = POLLIN, .revents = 0}};
+
+        const auto poll_ret = ::poll(fds, std::size(fds), -1);
+        if (poll_ret < 0)
         {
             if (errno == EINTR)
             {
                 continue;
             }
-            throw std::system_error(errno, std::generic_category(), "write");
+            // FIXME: notify that we failed
+            std::cerr
+                << "::poll failed: "
+                << std::error_code(errno, std::generic_category()).message()
+                << "\n";
+            return;
         }
-        total += static_cast<std::size_t>(n);
-    }
-    if (::tcdrain(handle.get()) == -1)
-    {
-        throw std::system_error(errno, std::generic_category(), "tcdrain");
-    }
 
-    return total;
-}
+        // We were woken by eventfd
+        if (fds[1].revents & POLLIN)
+        {
+            // Drain the eventfd counter
+            std::uint64_t data {};
+            while (::read(m_wake_fd.get(), &data, sizeof(data)) == sizeof(data))
+            {
+            }
+            if (stop_token.stop_requested())
+            {
+                return;
+            }
+        }
 
-std::size_t Serial_device::read_some(void *buf,
-                                     std::size_t maxlen,
-                                     std::chrono::milliseconds timeout)
-{
-    if (!handle)
-    {
-        throw std::system_error(
-            EBADF, std::generic_category(), "SerialPort not open");
-    }
+        if (fds[0].revents & POLLNVAL)
+        {
+            // FIXME: notify that we failed
+            std::cerr << "POLLNVAL: Serial FD not open\n";
+            return;
+        }
+        if (fds[0].revents & (POLLIN | POLLERR | POLLHUP))
+        {
+            while (true)
+            {
+                const auto num_read =
+                    ::read(m_serial_fd.get(), buffer.data(), buffer.size());
+                if (num_read > 0)
+                {
+                    // TODO: Parse packet framing, push complete packet to the
+                    // RX queue. We will drain the RX queue from the main thread
+                    const std::string message(
+                        reinterpret_cast<char *>(buffer.data()),
+                        reinterpret_cast<char *>(buffer.data() + num_read));
+                    std::cout << message;
+                }
+                else if (num_read == 0)
+                {
+                    // No bytes available
+                    break;
+                }
+                else if (num_read < 0 && errno == EAGAIN)
+                {
+                    // No bytes available
+                    break;
+                }
+                else if (num_read < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                else
+                {
+                    // FIXME: notify that we failed
+                    std::cerr << "::read failed: "
+                              << std::error_code(errno, std::generic_category())
+                                     .message()
+                              << "\n";
+                    return;
+                }
+            }
+        }
 
-    if (timeout.count() >= 0)
-    {
-        pollfd pfd {.fd = handle.get(), .events = POLLIN, .revents = 0};
-        for (;;)
+        if (fds[0].revents & (POLLERR | POLLHUP))
         {
-            const auto r = ::poll(&pfd, 1, static_cast<int>(timeout.count()));
-            if (r > 0)
-            {
-                break;
-            }
-            if (r == 0)
-            {
-                return 0; // timeout
-            }
-            if (errno == EINTR)
-            {
-                continue;
-            }
-            throw std::system_error(errno, std::generic_category(), "poll");
+            // FIXME: notify that we failed
+            // After draining any remaining bytes:
+            std::cerr << "Serial port error/hangup\n";
+            return;
         }
-    }
-    for (;;)
-    {
-        const auto n = ::read(handle.get(), buf, maxlen);
-        if (n >= 0)
-        {
-            return static_cast<std::size_t>(n);
-        }
-        if (errno == EINTR)
-        {
-            continue;
-        }
-        throw std::system_error(errno, std::generic_category(), "read");
     }
 }

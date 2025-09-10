@@ -3,28 +3,34 @@
 
 #include "unique_resource.hpp"
 
-#include <chrono>
-#include <string_view>
+#include <string>
+#include <thread>
 
 struct File_descriptor_deleter
 {
     void operator()(int fd) const;
 };
 
-struct Serial_device
+struct File_descriptor_flushing_deleter
 {
-    void open(std::string_view name, int baudrate);
+    void operator()(int fd) const;
+};
+
+class Serial_port
+{
+public:
+    ~Serial_port();
+
+    void open(const std::string &name, int baudrate);
     void close();
+    [[nodiscard]] bool is_open() const noexcept;
 
-    [[nodiscard]] bool is_open() const;
+private:
+    void rx_loop(std::stop_token stop_token);
 
-    std::size_t write_all(const void *data, std::size_t len);
-    std::size_t read_some(
-        void *buf,
-        std::size_t maxlen,
-        std::chrono::milliseconds timeout = std::chrono::milliseconds(-1));
-
-    Unique_resource<int, File_descriptor_deleter> handle;
+    Unique_resource<int, File_descriptor_flushing_deleter> m_serial_fd;
+    Unique_resource<int, File_descriptor_deleter> m_wake_fd;
+    std::jthread m_rx_thread;
 };
 
 #endif

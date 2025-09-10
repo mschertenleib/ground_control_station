@@ -61,7 +61,7 @@ void APIENTRY gl_debug_callback([[maybe_unused]] GLenum source,
     std::cerr << message << '\n';
 }
 
-void make_ui(Serial_device &serial_device)
+void make_ui(Serial_port &serial_port)
 {
     ImGui::DockSpaceOverViewport();
     ImPlot::ShowDemoWindow();
@@ -70,28 +70,17 @@ void make_ui(Serial_device &serial_device)
     {
         // FIXME: no default device, but save it to some config file
         static char device[512] {"/dev/ttyACM0"};
+        // FIXME: if it's not too restrictive we should list potential devices
+        ImGui::InputText("Device", device, sizeof(device));
+
         if (ImGui::Button("Open"))
         {
-            serial_device.open(device, 115200);
+            serial_port.open(device, 115200);
         }
         ImGui::SameLine();
         if (ImGui::Button("Close"))
         {
-            serial_device.close();
-        }
-        // FIXME: if it's not too restrictive we should list potential devices
-        ImGui::InputText("Device", device, sizeof(device));
-
-        if (serial_device.is_open())
-        {
-            static char buffer[1024] {};
-            const auto read_len = serial_device.read_some(
-                buffer, sizeof(buffer), std::chrono::milliseconds {0});
-            if (read_len > 0)
-            {
-                buffer[read_len] = '\0';
-            }
-            ImGui::TextColored({0.75f, 0.25f, 0.25f, 1.0f}, "%s", buffer);
+            serial_port.close();
         }
     }
     ImGui::End();
@@ -159,7 +148,7 @@ void run_application()
     {
         throw std::runtime_error("Failed to initialize GLFW");
     }
-    const Unique_resource<Stateless, GLFW_deleter> glfw_context({});
+    const Unique_resource<Stateless, GLFW_deleter> glfw_context(Stateless {});
 
     constexpr auto glsl_version = "#version 150";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -197,7 +186,7 @@ void run_application()
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    const Unique_resource<Stateless, ImGui_deleter> imgui_context({});
+    const Unique_resource<Stateless, ImGui_deleter> imgui_context(Stateless {});
 
     auto &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -215,19 +204,21 @@ void run_application()
     {
         throw std::runtime_error("ImGui: failed to initialize GLFW backend");
     }
-    const Unique_resource<Stateless, ImGui_glfw_deleter> imgui_glfw_context({});
+    const Unique_resource<Stateless, ImGui_glfw_deleter> imgui_glfw_context(
+        Stateless {});
 
     if (!ImGui_ImplOpenGL3_Init(glsl_version))
     {
         throw std::runtime_error("ImGui: failed to initialize OpenGL backend");
     }
     const Unique_resource<Stateless, ImGui_opengl_deleter> imgui_opengl_context(
-        {});
+        Stateless {});
 
     ImPlot::CreateContext();
-    const Unique_resource<Stateless, ImPlot_deleter> implot_context({});
+    const Unique_resource<Stateless, ImPlot_deleter> implot_context(
+        Stateless {});
 
-    Serial_device serial_device;
+    Serial_port serial_port {};
 
     while (!glfwWindowShouldClose(window.get()))
     {
@@ -237,7 +228,7 @@ void run_application()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        make_ui(serial_device);
+        make_ui(serial_port);
 
         ImGui::Render();
         int display_width {};

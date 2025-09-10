@@ -134,7 +134,7 @@ public:
         return m_deleter;
     }
 
-    [[nodiscard]] constexpr operator bool() const noexcept
+    [[nodiscard]] explicit constexpr operator bool() const noexcept
     {
         return m_owns_resource;
     }
